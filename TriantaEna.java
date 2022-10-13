@@ -1,24 +1,29 @@
 import java.util.ArrayList;
 import java.util.List;
 
-public class TriantaEna implements Rules{
-	
+public class TriantaEna extends Game implements Rules{
+
 	private int numberOfPlayers;
 	private TEPlayer[] playerArray;
 	private int turn = 0;
-	private TEDeck teDeck;
+	private TEDesk teDeck;
 	private ArrayList<TEPlayer> winPlayers;
 	private boolean gameEnd = false;
 
 
 	// --------------new--------------
+	@Override
 	public TEPlayer[] getPlayerArray(){
 		return playerArray;
 	}
 
 	// --------------new--------------
-	public TEDeck getTeDeck(){
+	public TEDesk getTeDeck(){
 		return teDeck;
+	}
+	
+	public void setTeDeck() {
+		teDeck = new TEDesk();
 	}
 
 	public boolean getGameEnd(){
@@ -31,6 +36,7 @@ public class TriantaEna implements Rules{
 	}
 
 	// --------------modified--------------
+	@Override
 	public void initializePlayers(ArrayList<String> playerNames) {
 		//for players with names
 		numberOfPlayers = playerNames.size();
@@ -41,14 +47,17 @@ public class TriantaEna implements Rules{
 			if(i == numberOfPlayers - 1){
 				playerArray[i].setAmountRemaining(300);
 				playerArray[i].setType("Dealer");
+
 			} else {
 				playerArray[i].setAmountRemaining(100);
 				playerArray[i].setType("Player");
 			}
+			playerArray[i].setCards(new ArrayList<Card>());
 			playerArray[i].setStatus("hit");
+			playerArray[i].setScore(0);
 		}
 	}
-	
+
 	public void initializePlayers(int n) {
 		//for players without names
 		playerArray = new TEPlayer[n];
@@ -66,55 +75,25 @@ public class TriantaEna implements Rules{
 		playerArray[index].setType("Player");
 	}
 
-	public void placeBet(TEPlayer p, int betAmount) {
+	public void placeBet(TEPlayer p, TEPlayer dealer, int betAmount) {
 		p.setBetAmount(betAmount);
 		p.setAmountRemaining(p.getAmountRemaining() - betAmount);
+		dealer.setAmountRemaining(betAmount + dealer.getAmountRemaining());
 	}
-
-	public void takeHit(TEPlayer p) {
-		p.setStatus("hit");
-		//distribute card
-		//make a function for randomly choosing a card
-		//distributeCard(p);
-		
-		//check total for player
-		if (p.getHandValue() > 31){
-			p.setAmountRemaining(p.getAmountRemaining() - p.getBetAmount());
-		}
-
-	}
+	
+	
 
 	//no need?
 	//check if all players are stand/bust
-	public boolean checkStandOrBust() {
-		boolean standOrBust = false;
-		for (int i=0; i<playerArray.length; i++) {
-			String playerStatus = playerArray[i].getStatus();
-			if (playerStatus == "hit"){
-				return standOrBust;
-			}
+	public boolean checkStandOrBust(TEPlayer p) {
+		if (p.getHandValue() > 31) {
+			p.setStatus("lose");
+			return true;
+		} else if (p.getAmountRemaining() <= 0){
+			p.setStatus("bust");
+			return true;
 		}
-		return true;
-	}
-	
-	//if they are, dealer takes hit
-	
-	public void dealerTakesHit(Player d) {
-		//get card till d.getFaceValue() >= 27
-		int dealerHandValue = d.getHandValue();
-		
-		List<Integer> winners = getWinnerAfterDealerTakesHit(dealerHandValue);
-	}
-	
-	public List<Integer> getWinnerAfterDealerTakesHit(int dealerHandValue){
-		List<Integer> winners = new ArrayList<Integer>();
-		
-		for (int i = 0; i < playerArray.length; i++) {
-			if (playerArray[i].getHandValue() >= dealerHandValue) {
-				winners.add(i);
-			}
-		}
-		return winners;
+		return false;
 	}
 
 	// --------------new--------------
@@ -126,24 +105,20 @@ public class TriantaEna implements Rules{
 	}
 
 	// --------------new--------------
+	@Override
 	public void isEnd(){
-		if(playerArray.length < 3){
-			gameEnd = true;
-		}
 		int count = 0;
 		for(TEPlayer player: playerArray){
-			if(player.getStatus() == "cash out" || player.getStatus() == "go bust"){
+			if(player.getStatus() == "bust"){
 				count++;
 			}
 		}
 		gameEnd = count == playerArray.length;
 	}
 
-	public void takeTurn(){
-		turn = (turn + 1) % playerArray.length;
-	}
 
 	// --------------new--------------
+	@Override
 	public void printCurrentCards(){
 		System.out.println("---------Current Cards---------");
 		String table = "";
@@ -161,57 +136,60 @@ public class TriantaEna implements Rules{
 		System.out.println(table);
 	}
 
-	// --------------new--------------
-	public void allCardVisible(){
-		for(TEPlayer player: playerArray){
-			for (Card card : player.getCards()) {
+	public void allCardVisible() {
+		for(TEPlayer p: playerArray) {
+			for(Card card : p.getCards()) {
 				card.setVisible(true);
 			}
 		}
 	}
 
 	// --------------new--------------
-	public boolean isWin(){
-		boolean win = false;
+	@Override
+	public ArrayList<TEPlayer> getWinners(){
+		winPlayers = new ArrayList<TEPlayer>();
 		for(TEPlayer player: playerArray){
 			if(player.getStatus().equals("win")){
 				winPlayers.add(player);
-				win = true;
 			}
 		}
-		return win;
-	}
-	
-	@Override
-	public boolean isValidMove() {
-		return false;
+		return winPlayers;
 	}
 
-	@Override
-	public String isWin(String[][] gb) {
-		// TODO Auto-generated method stub
-		return null;
-	}
 
-	// --------------modified--------------
 	@Override
-	public boolean play(Player p, String status, String card) {
-//		p.setStatus(status);
-		if (status.equals("hit")) {
-			//distribute card
-//			p.getCards().add(card);
-			//call function to check for winner here?
+	public boolean isWin(TEPlayer player, TEPlayer dealer) {
+		boolean isWin = false;
+		if (player.getType() == "Player") {
+			if (player.getStatus() != "lose" || player.getStatus() != "fold" || player.getStatus() != "bust") {
+				if (player.getHandValue() == 31 || (player.getHandValue() > dealer.getHandValue() && player.getHandValue() <= 31 && dealer.getHandValue() >= 27)) {
+					player.setStatus("win");
+					player.setScore(player.getScore() + 1);
+					isWin = true;
+					player.setAmountRemaining((2 * player.getBetAmount()) + player.getAmountRemaining());
+					dealer.setAmountRemaining(dealer.getAmountRemaining() - (2 * player.getBetAmount()));
+				}
+				if (dealer.getStatus() == "lose") {
+					if (player.getHandValue() <= 31) {
+						player.setStatus("win");
+						player.setScore(player.getScore() + 1);
+						isWin = true;
+						player.setAmountRemaining((2 * player.getBetAmount()) + player.getAmountRemaining());
+						dealer.setAmountRemaining(dealer.getAmountRemaining() - (2 * player.getBetAmount()));
+					}
+				}
+			}
+
 		}
-
-		return false;
+		return isWin;
 	}
 
-	// --------------modified--------------
-	@Override
-	public void distributeCard(Player p, String card) {
-		//call method from desk class
-//		p.getCards().add(card);
-		//face down or up?
+	public void endGame() {
+		for (TEPlayer p : playerArray) {
+			p.setBetAmount(0);
+			p.setCards(new ArrayList<Card>());
+			p.setHandValue(0);
+			System.out.println("Amount remaining for Player " + p.getName() + ": " + String.valueOf(p.getAmountRemaining()));
+		}
 	}
-
 }
